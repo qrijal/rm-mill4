@@ -308,7 +308,7 @@
 
     const TBL_MASTER = "master_data";
     const TBL_LOG = "cycle_count_log_3";
-    const TBL_LOG2 = "cycle_count_log4";
+    const TBL_LOG2 = "cycle_count_log_4";
     const DEBUG = true;
 
     // ==================== 🛠️ DEBUG UTILS ====================
@@ -486,7 +486,7 @@
         showStatus("❌ Gagal simpan: " + err.message, "error");
       } finally {
         btnSave.disabled = false;
-        btnSave.textContent = "💾 Simpan ke Supabase";
+        btnSave.textContent = "💾 Simpan";
       }
     }
 
