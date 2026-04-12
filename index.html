@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Cycle Count Counter 1</title>
+  <title>Cycle Count Counter 2</title>
 
   <!-- Supabase JS Client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0"></script>
@@ -237,7 +237,7 @@
 
   <div class="container">
     <h2>📦 Cycle Count</h2>
-    <h2 style="font-size: 12px;">Counter : 2</h2>
+    <h2 style="font-size: 12px;font-size: bold;">Counter : 2</h2>
 
     <!-- 🔍 SCAN VIEW -->
     <div id="scanView">
@@ -265,12 +265,12 @@
       </div>
       <div class="input-group">
         <label>🔢 Quantity (Jumlah Fisik)</label>
-        <input type="number" id="inputQty" placeholder="0" inputmode="numeric" min="0">
+        <input type="text" id="inputQty" placeholder="Contoh: 1.500,5" inputmode="decimal" autocomplete="off">
       </div>
       <!-- TAMBAHKAN DI BAWAH INPUT QUANTITY -->
       <div class="input-group">
         <label>📍 Lokasi (Manual)</label>
-        <input type="text" id="inputLokasi" placeholder="Contoh: A-01" maxlength="5" inputmode="text">
+        <input type="text" id="inputLokasi" placeholder="Contoh: A-01" maxlength="10" inputmode="text">
       </div>
       <button id="btnSave" class="btn btn-success">
         💾 Simpan
@@ -285,14 +285,33 @@
     <!-- 📥 DOWNLOAD SECTION -->
     <div class="download-section">
       <h4>📊 Download Data</h4>
-      <button id="btnDownload" class="btn btn-warning" onclick="downloadData()">
-        📥 Download Counter 1
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <input type="date" id="filterStart"
+          style="flex:1; padding:10px; border:1px solid #ddd; border-radius:8px; font-size:14px;">
+        <span style="align-self:center; color:#666;">s/d</span>
+        <input type="date" id="filterEnd"
+          style="flex:1; padding:10px; border:1px solid #ddd; border-radius:8px; font-size:14px;">
+      </div>
+      <button class="btn btn-outline" onclick="clearDateFilter()"
+        style="padding:8px; font-size:13px; margin-bottom:12px;">
+        🔄 Reset Filter
       </button>
-       <button id="btnDownload2" class="btn btn-warning" onclick="downloadData2()">
-        📥 Download Counter 2
+      <div class="input-group" style="margin-top:10px; text-align:left;">
+    <label style="font-size:14px;">👤 Pilih Counter</label>
+    <select id="counterSelect" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:8px; font-size:16px; background:#fff;">
+      <option value="cycle_count_log_3">✅ Counter 1</option>
+      <option value="cycle_count_log_4">✅ Counter 2</option>
+    </select>
+  </div>
+
+      <button id="btnDownload" class="btn btn-warning" onclick="downloadData()">
+        Download
       </button>
       <p class="helper" style="font-size:11px;margin-top:8px;">
         Download hasil cycle count sebagai file CSV (buka di Excel/Google Sheets)
+      </p>
+      <p class="helper" style="font-size:11px;margin-top:8px;">
+        KCS-SDA @2026 V.1.1
       </p>
     </div>
   </div>
@@ -308,7 +327,7 @@
 
     const TBL_MASTER = "master_data";
     const TBL_LOG = "cycle_count_log_3";
-    const TBL_LOG2 = "cycle_count_log_4";
+    const TBL_LOG2 = "cycle_count_log4";
     const DEBUG = true;
 
     // ==================== 🛠️ DEBUG UTILS ====================
@@ -396,6 +415,29 @@
         }
       }, 100);
     }
+    // Helper: Reset filter tanggal
+    function clearDateFilter() {
+      document.getElementById('filterStart').value = '';
+      document.getElementById('filterEnd').value = '';
+      showStatus("✅ Filter tanggal direset", "success");
+      setTimeout(hideStatus, 2000);
+    }
+
+    // Helper: Bangun query dengan filter tanggal
+    function buildDateQuery(query) {
+      const startDate = document.getElementById('filterStart').value;
+      const endDate = document.getElementById('filterEnd').value;
+
+      // Jika start date diisi, filter >= tanggal tersebut (dari jam 00:00:00)
+      if (startDate) {
+        query = query.gte('timestamps', `${startDate}T00:00:00`);
+      }
+      // Jika end date diisi, filter <= tanggal tersebut (sampai jam 23:59:59)
+      if (endDate) {
+        query = query.lte('timestamps', `${endDate}T23:59:59`);
+      }
+      return query;
+    }
 
     function stopCamera() {
       log("🎥 stopCamera() called");
@@ -454,8 +496,20 @@
     }
 
     async function saveData() {
-      const qty = document.getElementById('inputQty').value;
-      if (!qty || Number(qty) < 0) { alert("⚠️ Masukkan quantity yang valid!"); return; }
+      const rawQty = document.getElementById('inputQty').value;
+    
+    if (!rawQty) {
+      alert("⚠️ Masukkan quantity!");
+      return;
+    }
+
+    const cleanQty = rawQty.replace(/\./g, '').replace(',', '.');
+    const qtyValue = parseFloat(cleanQty);
+
+    if (isNaN(qtyValue) || qtyValue < 0) {
+      alert("⚠️ Format jumlah tidak valid!");
+      return;
+    }
 
       const btnSave = document.getElementById('btnSave');
       btnSave.disabled = true;
@@ -465,7 +519,7 @@
       const record = {
         partnumber: currentData.partnumber,
         partdescription: currentData.partdescription,
-        qty: Number(qty),
+        qty:qtyValue,
         lokasi: document.getElementById('inputLokasi').value.trim().toUpperCase(),
         operator: "Counter2"
       };
@@ -491,42 +545,75 @@
     }
 
     // ==================== 📥 DOWNLOAD CSV FUNCTION ====================
-//Counter 1
+
     async function downloadData() {
       const btn = document.getElementById('btnDownload');
       const originalText = btn.innerHTML;
+      const selectedTable = document.getElementById('counterSelect').value;
 
       btn.disabled = true;
       btn.innerHTML = "⏳ Mengunduh...";
-      showStatus("📥 Mengambil data dari database...", "");
-      log("📥 Download started");
+      showStatus("📥 Mengambil semua data...", "");
+      log("📥 Download unlimited started");
 
       try {
         if (!supabaseReady && !initSupabase()) throw new Error("Database tidak terhubung");
 
-        // Fetch semua data dari cycle_count_counter1_log, urutkan dari terbaru
-        const { data, error } = await supabase
-          .from(TBL_LOG)
-          .select('*')
-          .order('timestamps', { ascending: false })
-          .limit(1000); // Batasi 1000 record agar tidak berat
+        let allData = [];
+        let page = 0;
+        const PAGE_SIZE = 1000; // Supabase default max
+        let hasMore = true;
 
-        if (error) throw error;
-        if (!data || data.length === 0) {
+        // Loop fetch data sampai habis (Pagination)
+        while (hasMore) {
+          const from = page * PAGE_SIZE;
+          const to = from + PAGE_SIZE - 1;
+
+          // Bangun query dasar
+          let query = supabase
+            .from(selectedTable)
+            .select('*', { count: 'exact' }) // Hitung total data
+            .order('timestamps', { ascending: false })
+            .range(from, to); // Ambil slice data ini
+
+          // Terapkan filter tanggal
+          query = buildDateQuery(query);
+
+          const { data, error, count } = await query;
+
+          if (error) throw error;
+
+          if (data) {
+            allData = allData.concat(data);
+            showStatus(`📥 Loaded ${allData.length} / ${count || '?'} records...`, "");
+            log(`📄 Page ${page + 1}: ${data.length} rows`);
+          }
+
+          // Cek apakah masih ada data berikutnya
+          hasMore = data.length === PAGE_SIZE;
+          page++;
+
+          // Safety break (jaga-jaga jika data sangat besar)
+          if (page > 50) {
+            log("⚠️ Stopped at 50 pages (50k rows) for safety", "error");
+            break;
+          }
+        }
+
+        if (allData.length === 0) {
           showStatus("⚠️ Tidak ada data untuk diunduh", "error");
           return;
         }
 
-        log(`📊 Fetched ${data.length} records`, "success");
+        log(`✅ Total fetched: ${allData.length} records`, "success");
 
-        // Konversi ke CSV
-        const csv = convertToCSV(data);
+        // Konversi ke CSV & Download
+        const csv = convertToCSV(allData);
+        const filename = `cycle_count${document.getElementById('filterStart').value ? '_' + document.getElementById('filterStart').value : ''}_${new Date().toISOString().slice(0, 10)}.csv`;
 
-        // Trigger download
-        downloadCSV(csv, `cycle_count_counter1_${new Date().toISOString().slice(0, 10)}.csv`);
+        downloadCSV(csv, filename);
 
-        showStatus(`✅ Berhasil mengunduh ${data.length} data!`, "success");
-        log("✅ Download completed", "success");
+        showStatus(`✅ Berhasil mengunduh ${allData.length} data!`, "success");
 
       } catch (err) {
         log("❌ Download error: " + err.message, "error");
@@ -539,35 +626,48 @@
     }
 
     // Helper: Convert JSON array to CSV string
-    function convertToCSV(data) {
-      if (!data || data.length === 0) return '';
-
-      // Headers
-      const headers = Object.keys(data[0]);
-      const csvRows = [];
-
-      // Add header row
-      csvRows.push(headers.map(h => `"${h}"`).join(','));
-
-      // Add data rows
-      for (const row of data) {
-        const values = headers.map(header => {
-          let value = row[header];
-          // Handle null/undefined
-          if (value === null || value === undefined) value = '';
-          // Handle dates - format nicely
-          if (value instanceof Date || (typeof value === 'string' && value.includes('T'))) {
-            value = new Date(value).toLocaleString('id-ID');
+    // Helper: Convert JSON array to CSV string (FIXED)
+function convertToCSV(data) {
+  if (!data || data.length === 0) return '';
+  
+  // Headers
+  const headers = Object.keys(data[0]);
+  const csvRows = [];
+  
+  // Daftar kolom yang memang bertipe timestamp (whitelist)
+  const DATE_COLUMNS = ['timestamps', 'created_at', 'updated_at', 'date'];
+  
+  // Add header row
+  csvRows.push(headers.map(h => `"${h}"`).join(','));
+  
+  // Add data rows
+  for (const row of data) {
+    const values = headers.map(header => {
+      let value = row[header];
+      
+      // Handle null/undefined
+      if (value === null || value === undefined) value = '';
+      
+      // ✅ FIX: Hanya format kolom yang ada di DATE_COLUMNS
+      if (DATE_COLUMNS.includes(header)) {
+        if (value) {
+          const dateObj = new Date(value);
+          // Cek validitas tanggal sebelum diformat
+          if (!isNaN(dateObj.getTime())) {
+            value = dateObj.toLocaleString('id-ID');
           }
-          // Escape quotes and wrap in quotes
-          value = String(value).replace(/"/g, '""');
-          return `"${value}"`;
-        });
-        csvRows.push(values.join(','));
+        }
       }
-
-      return csvRows.join('\n');
-    }
+      
+      // Escape quotes dan wrap dalam tanda kutip
+      value = String(value).replace(/"/g, '""');
+      return `"${value}"`;
+    });
+    csvRows.push(values.join(','));
+  }
+  
+  return csvRows.join('\n');
+}
 
     // Helper: Trigger file download
     function downloadCSV(csvContent, filename) {
@@ -591,84 +691,47 @@
       URL.revokeObjectURL(url);
       log("💾 File downloaded: " + filename, "success");
     }
-    //Counter 2
-    async function downloadData2() {
-      const btn = document.getElementById('btnDownload2');
-      const originalText = btn.innerHTML;
-
-      btn.disabled = true;
-      btn.innerHTML = "⏳ Mengunduh...";
-      showStatus("📥 Mengambil data dari database...", "");
-      log("📥 Download started");
-
-      try {
-        if (!supabaseReady && !initSupabase()) throw new Error("Database tidak terhubung");
-
-        // Fetch semua data dari cycle_count_log, urutkan dari terbaru
-        const { data, error } = await supabase
-          .from(TBL_LOG2)
-          .select('*')
-          .order('timestamps', { ascending: false })
-          .limit(1000); // Batasi 1000 record agar tidak berat
-
-        if (error) throw error;
-        if (!data || data.length === 0) {
-          showStatus("⚠️ Tidak ada data untuk diunduh", "error");
-          return;
-        }
-
-        log(`📊 Fetched ${data.length} records`, "success");
-
-        // Konversi ke CSV
-        const csv = convertToCSV(data);
-
-        // Trigger download
-        downloadCSV(csv, `cycle_count_counter2_${new Date().toISOString().slice(0, 10)}.csv`);
-
-        showStatus(`✅ Berhasil mengunduh ${data.length} data!`, "success");
-        log("✅ Download completed", "success");
-
-      } catch (err) {
-        log("❌ Download error: " + err.message, "error");
-        showStatus("❌ Gagal download: " + err.message, "error");
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-        setTimeout(() => hideStatus(), 3000);
-      }
-    }
-
+    
     // Helper: Convert JSON array to CSV string
-    function convertToCSV(data) {
-      if (!data || data.length === 0) return '';
+    // Helper: Convert JSON array to CSV string (FIXED - No False Date Detection)
+function convertToCSV(data) {
+  if (!data || data.length === 0) return '';
+  
+  const headers = Object.keys(data[0]);
+  const csvRows = [];
+  
+  // Header row
+  csvRows.push(headers.map(h => `"${h}"`).join(','));
+  
+  // ✅ Whitelist kolom yang BENAR-BENAR bertipe tanggal
+  const DATE_COLUMNS = new Set(['timestamps', 'created_at', 'updated_at', 'date']);
 
-      // Headers
-      const headers = Object.keys(data[0]);
-      const csvRows = [];
+  for (const row of data) {
+    const values = headers.map(header => {
+      let val = row[header];
 
-      // Add header row
-      csvRows.push(headers.map(h => `"${h}"`).join(','));
-
-      // Add data rows
-      for (const row of data) {
-        const values = headers.map(header => {
-          let value = row[header];
-          // Handle null/undefined
-          if (value === null || value === undefined) value = '';
-          // Handle dates - format nicely
-          if (value instanceof Date || (typeof value === 'string' && value.includes('T'))) {
-            value = new Date(value).toLocaleString('id-ID');
-          }
-          // Escape quotes and wrap in quotes
-          value = String(value).replace(/"/g, '""');
-          return `"${value}"`;
-        });
-        csvRows.push(values.join(','));
+      // 1. Handle kosong
+      if (val === null || val === undefined) {
+        val = '';
+      } 
+      // 2. Hanya format tanggal untuk kolom yang terdaftar di whitelist
+      else if (DATE_COLUMNS.has(header)) {
+        const d = new Date(val);
+        val = isNaN(d.getTime()) ? String(val) : d.toLocaleString('id-ID');
+      } 
+      // 3. Kolom lain (SKU, Deskripsi, Lokasi, dll) langsung aman sebagai string
+      else {
+        val = String(val);
       }
 
-      return csvRows.join('\n');
-    }
-
+      // Escape tanda kutip untuk format CSV standar
+      return `"${String(val).replace(/"/g, '""')}"`;
+    });
+    csvRows.push(values.join(','));
+  }
+  
+  return csvRows.join('\n');
+}
     // Helper: Trigger file download
     function downloadCSV(csvContent, filename) {
       // Add BOM for Excel UTF-8 support (agar karakter Indonesia tidak rusak)
